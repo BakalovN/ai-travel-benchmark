@@ -275,6 +275,13 @@
         @media (max-width: 700px) {
             .structured-field { grid-template-columns: 1fr; gap: 3px; }
         }
+        .download-button {
+            background: #27ae60;
+        }
+
+        .download-button:hover:not(:disabled) {
+            background: #219150;
+        }
     </style>
 </head>
 <body>
@@ -282,8 +289,24 @@
     <h1>AI Travel Benchmark Platform</h1>
 
     <div class="input-container">
-        <input type="text" id="prompt" placeholder="Enter your prompt...">
-        <button id="sendButton" type="button">Send</button>
+        <input
+                type="text"
+                id="prompt"
+                placeholder="Enter your prompt...">
+
+        <button
+                id="sendButton"
+                type="button">
+            Send
+        </button>
+
+        <button
+                id="downloadButton"
+                type="button"
+                class="download-button"
+                hidden>
+            Download
+        </button>
     </div>
 
     <div id="statusMessage" class="status-message" aria-live="polite"></div>
@@ -300,7 +323,10 @@
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
 <script>
+    let latestBenchmarkData = null;
     const outputSchema = {
             tripSummary: {
                 origin: "",
@@ -782,9 +808,409 @@
             }
         }
 
+        function normalizeExcelValue(value) {
+            if (value === null || value === undefined) {
+                return "";
+            }
+
+            if (typeof value === "boolean") {
+                return value ? "Yes" : "No";
+            }
+
+            if (typeof value === "object") {
+                return JSON.stringify(value);
+            }
+
+            return String(value);
+        }
+
+        function flattenJson(
+            value,
+            parentPath = "",
+            rows = []
+        ) {
+            if (value === null || value === undefined) {
+                rows.push({
+                    Field: parentPath || "Value",
+                    Value: ""
+                });
+
+                return rows;
+            }
+
+            if (Array.isArray(value)) {
+                if (value.length === 0) {
+                    rows.push({
+                        Field: parentPath,
+                        Value: "None"
+                    });
+
+                    return rows;
+                }
+
+                value.forEach((item, index) => {
+                    const itemPath =
+                        `${parentPath}[${index + 1}]`;
+
+                    flattenJson(
+                        item,
+                        itemPath,
+                        rows
+                    );
+                });
+
+                return rows;
+            }
+
+            if (typeof value === "object") {
+                const entries =
+                    Object.entries(value);
+
+                if (entries.length === 0) {
+                    rows.push({
+                        Field: parentPath,
+                        Value: ""
+                    });
+
+                    return rows;
+                }
+
+                for (const [key, childValue] of entries) {
+                    const childPath =
+                        parentPath
+                            ? `${parentPath}.${key}`
+                            : key;
+
+                    flattenJson(
+                        childValue,
+                        childPath,
+                        rows
+                    );
+                }
+
+                return rows;
+            }
+
+            rows.push({
+                Field: parentPath || "Value",
+                Value: normalizeExcelValue(value)
+            });
+
+            return rows;
+        }
+
+        function createModelSummaryRows(results) {
+            if (!Array.isArray(results)) {
+                return [];
+            }
+
+            return results.map(result => ({
+                Provider:
+                    result.provider ||
+                    "Unknown provider",
+
+                Model:
+                    result.model ||
+                    "Unknown model",
+
+                Status:
+                    result.successful
+                        ? "Successful"
+                        : "Failed",
+
+                "Response time (ms)":
+                    result.responseTimeMilliseconds ?? 0,
+
+                Error:
+                    result.errorMessage || ""
+            }));
+        }
+
+        function createComparisonRows(comparison) {
+            if (
+                !comparison ||
+                !Array.isArray(comparison.tables)
+            ) {
+                return [];
+            }
+
+            const rows = [];
+
+            for (const table of comparison.tables) {
+                const modelNames =
+                    Object.keys(table.scores || {});
+
+                for (const row of table.rows || []) {
+                    const exportRow = {
+                        Category:
+                            table.title ||
+                            "Comparison",
+
+                        Criterion:
+                            row.label ??
+                            row.field ??
+                            "Unknown criterion"
+                    };
+
+                    for (const model of modelNames) {
+                        exportRow[model] =
+                            normalizeExcelValue(
+                                row.values?.[model]
+                            );
+                    }
+
+                    rows.push(exportRow);
+                }
+
+                const scoreRow = {
+                    Category:
+                        table.title ||
+                        "Comparison",
+
+                    Criterion:
+                        "Category score"
+                };
+
+                for (const model of modelNames) {
+                    scoreRow[model] =
+                        table.scores?.[model] ?? 0;
+                }
+
+                rows.push(scoreRow);
+            }
+
+            return rows;
+        }
+
+        function createRankingRows(comparison) {
+            if (
+                !comparison ||
+                !Array.isArray(comparison.ranking)
+            ) {
+                return [];
+            }
+
+            return comparison.ranking.map(entry => ({
+                Position:
+                    entry.position ?? "",
+
+                Model:
+                    entry.model ??
+                    "Unknown model",
+
+                Score:
+                    entry.score ?? 0
+            }));
+        }
+
+        function addWorksheet(
+            workbook,
+            sheetName,
+            rows,
+            columnWidths = []
+        ) {
+            const safeRows =
+                Array.isArray(rows) && rows.length > 0
+                    ? rows
+                    : [{ Information: "No data available" }];
+
+            const worksheet =
+                XLSX.utils.json_to_sheet(
+                    safeRows
+                );
+
+            if (columnWidths.length > 0) {
+                worksheet["!cols"] =
+                    columnWidths.map(width => ({
+                        wch: width
+                    }));
+            }
+
+            XLSX.utils.book_append_sheet(
+                workbook,
+                worksheet,
+                sheetName.substring(0, 31)
+            );
+        }
+
+        function createSafeFileName(value) {
+            return String(value || "benchmark")
+                .trim()
+                .replace(/[<>:"/\\|?*]+/g, "")
+                .replace(/\s+/g, "_")
+                .substring(0, 50);
+        }
+
+        function downloadBenchmarkExcel() {
+            if (!latestBenchmarkData) {
+                setStatus(
+                    "There is no benchmark result to download.",
+                    "error"
+                );
+
+                return;
+            }
+
+            if (typeof XLSX === "undefined") {
+                setStatus(
+                    "The Excel library could not be loaded.",
+                    "error"
+                );
+
+                return;
+            }
+
+            const workbook =
+                XLSX.utils.book_new();
+
+            const results =
+                Array.isArray(latestBenchmarkData.results)
+                    ? latestBenchmarkData.results
+                    : [];
+
+            /*
+             * Sheet 1: Overall summary
+             */
+            addWorksheet(
+                workbook,
+                "Summary",
+                createModelSummaryRows(results),
+                [24, 28, 16, 22, 55]
+            );
+
+            /*
+             * One separate sheet for every AI model.
+             */
+            for (const result of results) {
+                const provider =
+                    result.provider ||
+                    "Unknown provider";
+
+                const modelRows = [
+                    {
+                        Field: "Provider",
+                        Value: provider
+                    },
+                    {
+                        Field: "Model",
+                        Value:
+                            result.model ||
+                            "Unknown model"
+                    },
+                    {
+                        Field: "Status",
+                        Value:
+                            result.successful
+                                ? "Successful"
+                                : "Failed"
+                    },
+                    {
+                        Field: "Response time (ms)",
+                        Value:
+                            result.responseTimeMilliseconds ??
+                            0
+                    }
+                ];
+
+                if (result.successful && result.content) {
+                    modelRows.push(
+                        ...flattenJson(result.content)
+                    );
+                } else {
+                    modelRows.push({
+                        Field: "Error",
+                        Value:
+                            result.errorMessage ||
+                            "Unknown error"
+                    });
+                }
+
+                addWorksheet(
+                    workbook,
+                    provider,
+                    modelRows,
+                    [55, 100]
+                );
+            }
+
+            /*
+             * Comparison tables
+             */
+            addWorksheet(
+                workbook,
+                "Comparison",
+                createComparisonRows(
+                    latestBenchmarkData.comparison
+                ),
+                [28, 35, 70, 70, 70]
+            );
+
+            /*
+             * Final ranking
+             */
+            addWorksheet(
+                workbook,
+                "Final Ranking",
+                createRankingRows(
+                    latestBenchmarkData.comparison
+                ),
+                [12, 35, 16]
+            );
+
+            /*
+             * Original user prompt
+             */
+            addWorksheet(
+                workbook,
+                "Request",
+                [
+                    {
+                        Field: "Prompt",
+                        Value:
+                            latestBenchmarkData.prompt ||
+                            ""
+                    },
+                    {
+                        Field: "Export date",
+                        Value:
+                            new Date().toLocaleString()
+                    }
+                ],
+                [22, 110]
+            );
+
+            const destination =
+                latestBenchmarkData.results?.[0]
+                    ?.content
+                    ?.tripSummary
+                    ?.destination;
+
+            const fileName =
+                createSafeFileName(
+                    destination ||
+                    "AI_Travel_Benchmark"
+                );
+
+            XLSX.writeFile(
+                workbook,
+                `${fileName}_benchmark.xlsx`
+            );
+
+            setStatus(
+                "The Excel file was created successfully.",
+                "success"
+            );
+        }
+
         async function executeBenchmark() {
             const promptInput = document.getElementById("prompt");
             const sendButton = document.getElementById("sendButton");
+
+            const downloadButton =
+                document.getElementById(
+                    "downloadButton"
+                );
+
             const resultsSection = document.getElementById("resultsSection");
             const prompt = promptInput.value.trim();
 
@@ -795,6 +1221,10 @@
             }
 
             sendButton.disabled = true;
+
+            downloadButton.hidden = true;
+            latestBenchmarkData = null;
+
             sendButton.textContent = "Processing...";
             resultsSection.hidden = true;
             clearResults();
@@ -813,11 +1243,14 @@
                 }
 
                 const data = await response.json();
+                latestBenchmarkData = data;
                 console.log("Complete server response:", data);
 
                 renderModelResults(data.results);
                 renderComparison(data.comparison);
                 renderRanking(data.comparison);
+
+                downloadButton.hidden = false;
 
                 resultsSection.hidden = false;
                 setStatus("Benchmark completed successfully.", "success");
@@ -832,6 +1265,15 @@
         }
 
         document.getElementById("sendButton").addEventListener("click", executeBenchmark);
+
+
+        document
+            .getElementById("downloadButton")
+            .addEventListener(
+                "click",
+                downloadBenchmarkExcel
+            );
+
         document.getElementById("prompt").addEventListener("keydown", event => {
             if (event.key === "Enter") {
                 event.preventDefault();

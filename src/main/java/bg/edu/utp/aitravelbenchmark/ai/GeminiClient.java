@@ -13,6 +13,7 @@ public class GeminiClient implements AiProviderClient {
 
     private final RestClient restClient;
     private final String apiKey;
+    @Value("${ai.gemini.model}")
     private final String model;
 
     public GeminiClient(
@@ -104,5 +105,10 @@ public class GeminiClient implements AiProviderClient {
         }
 
         return text.asText();
+    }
+
+    @Override
+    public String getModelName() {
+        return model;
     }
 }

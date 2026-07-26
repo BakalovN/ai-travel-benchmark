@@ -4,4 +4,6 @@ public interface AiProviderClient {
     String getProviderName();
 
     String generate(String instruction);
+
+    String getModelName();
 }

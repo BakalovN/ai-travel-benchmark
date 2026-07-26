@@ -44,7 +44,7 @@ public class AiBenchmarkService {
 
                 results.add(new AiModelResult(
                         client.getProviderName(),
-                        null,
+                        client.getModelName(),
                         true,
                         parsedContent,
                         rawContent,
@@ -58,7 +58,7 @@ public class AiBenchmarkService {
 
                 results.add(new AiModelResult(
                         client.getProviderName(),
-                        null,
+                        client.getModelName(),
                         false,
                         null,
                         null,

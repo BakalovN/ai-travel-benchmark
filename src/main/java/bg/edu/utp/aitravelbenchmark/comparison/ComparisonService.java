@@ -1,9 +1,13 @@
 package bg.edu.utp.aitravelbenchmark.comparison;
 
-import tools.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -13,34 +17,88 @@ public class ComparisonService {
     private static final String GEMINI = "Gemini";
     private static final String MICROSOFT = "Microsoft Phi";
 
+    /*
+     * При тези полета стойност 0 не представлява
+     * реална финансова оценка и не носи точки.
+     *
+     * Не включваме полета като visaCost или otherCosts,
+     * защото при тях нулата може да бъде напълно коректна.
+     */
+    private static final Set<String>
+            REQUIRED_POSITIVE_MONEY_FIELDS = Set.of(
+            "/budget/maximumBudgetPerPerson",
+            "/budget/flightCost",
+            "/budget/accommodationCost",
+            "/budget/foodCost",
+            "/budget/activitiesCost",
+            "/budget/totalEstimatedCost",
+            "/flight/estimatedTicketPrice",
+            "/accommodation/pricePerNight",
+            "/accommodation/totalAccommodationPrice"
+    );
+
     public BenchmarkComparisonResponse compare(
             JsonNode chatGptResponse,
             JsonNode geminiResponse,
             JsonNode microsoftResponse
     ) {
-        Map<String, JsonNode> modelResponses = new LinkedHashMap<>();
-        modelResponses.put(CHATGPT, chatGptResponse);
-        modelResponses.put(GEMINI, geminiResponse);
-        modelResponses.put(MICROSOFT, microsoftResponse);
+        Map<String, JsonNode> modelResponses =
+                new LinkedHashMap<>();
 
-        List<TableDefinition> definitions = createTableDefinitions();
+        modelResponses.put(
+                CHATGPT,
+                chatGptResponse
+        );
 
-        Map<String, Double> totalScores = new LinkedHashMap<>();
-        modelResponses.keySet().forEach(model -> totalScores.put(model, 0.0));
+        modelResponses.put(
+                GEMINI,
+                geminiResponse
+        );
 
-        List<ComparisonTable> tables = new ArrayList<>();
+        modelResponses.put(
+                MICROSOFT,
+                microsoftResponse
+        );
+
+        List<TableDefinition> definitions =
+                createTableDefinitions();
+
+        Map<String, Double> totalScores =
+                new LinkedHashMap<>();
+
+        modelResponses
+                .keySet()
+                .forEach(model ->
+                        totalScores.put(
+                                model,
+                                0.0
+                        )
+                );
+
+        List<ComparisonTable> tables =
+                new ArrayList<>();
 
         for (TableDefinition definition : definitions) {
-            ComparisonTable table = evaluateTable(definition, modelResponses);
+            ComparisonTable table =
+                    evaluateTable(
+                            definition,
+                            modelResponses
+                    );
 
             tables.add(table);
 
-            table.scores().forEach((model, score) ->
-                    totalScores.merge(model, score, Double::sum)
+            table.scores().forEach(
+                    (model, score) ->
+                            totalScores.merge(
+                                    model,
+                                    score,
+                                    Double::sum
+                            )
             );
         }
 
-        List<RankingEntry> ranking = createRanking(totalScores);
+        List<RankingEntry> ranking =
+                createRanking(totalScores);
 
         return new BenchmarkComparisonResponse(
                 tables,
@@ -53,32 +111,72 @@ public class ComparisonService {
             TableDefinition definition,
             Map<String, JsonNode> modelResponses
     ) {
-        List<ComparisonRow> rows = new ArrayList<>();
-        Map<String, Double> scores = new LinkedHashMap<>();
+        List<ComparisonRow> rows =
+                new ArrayList<>();
 
-        modelResponses.keySet().forEach(model -> scores.put(model, 0.0));
+        Map<String, Double> scores =
+                new LinkedHashMap<>();
+
+        modelResponses
+                .keySet()
+                .forEach(model ->
+                        scores.put(
+                                model,
+                                0.0
+                        )
+                );
 
         for (FieldDefinition field : definition.fields()) {
-            Map<String, String> values = new LinkedHashMap<>();
+            Map<String, String> values =
+                    new LinkedHashMap<>();
 
-            for (Map.Entry<String, JsonNode> entry : modelResponses.entrySet()) {
-                String model = entry.getKey();
-                JsonNode response = entry.getValue();
+            for (
+                    Map.Entry<String, JsonNode> entry
+                    : modelResponses.entrySet()
+            ) {
+                String model =
+                        entry.getKey();
 
-                JsonNode valueNode = response.at(field.jsonPointer());
-                String displayValue = formatValue(valueNode);
+                JsonNode response =
+                        entry.getValue();
 
-                values.put(model, displayValue);
+                JsonNode valueNode =
+                        response.at(
+                                field.jsonPointer()
+                        );
 
-                if (hasMeaningfulValue(valueNode)) {
-                    scores.merge(model, field.points(), Double::sum);
+                String displayValue =
+                        formatValue(valueNode);
+
+                values.put(
+                        model,
+                        displayValue
+                );
+
+                if (
+                        hasMeaningfulValue(
+                                field,
+                                valueNode
+                        )
+                ) {
+                    scores.merge(
+                            model,
+                            field.points(),
+                            Double::sum
+                    );
                 }
             }
 
-            rows.add(new ComparisonRow(field.label(), values));
+            rows.add(
+                    new ComparisonRow(
+                            field.label(),
+                            values
+                    )
+            );
         }
 
-        String winner = findWinner(scores);
+        String winner =
+                findWinner(scores);
 
         return new ComparisonTable(
                 definition.title(),
@@ -88,13 +186,25 @@ public class ComparisonService {
         );
     }
 
-    private boolean hasMeaningfulValue(JsonNode node) {
-        if (node == null || node.isMissingNode() || node.isNull()) {
+    /**
+     * Проверява дали дадена стойност трябва да получи точки.
+     */
+    private boolean hasMeaningfulValue(
+            FieldDefinition field,
+            JsonNode node
+    ) {
+        if (
+                node == null
+                        || node.isMissingNode()
+                        || node.isNull()
+        ) {
             return false;
         }
 
         if (node.isTextual()) {
-            return !node.asText().isBlank();
+            return !node
+                    .asText()
+                    .isBlank();
         }
 
         if (node.isArray() || node.isObject()) {
@@ -102,19 +212,80 @@ public class ComparisonService {
         }
 
         /*
-         * Числата 0 и boolean false засега се приемат за попълнени стойности.
-         * По-късно ще добавим правила според конкретното поле.
+         * При задължителните парични полета стойността
+         * трябва да бъде реално число, по-голямо от нула.
          */
+        if (
+                isRequiredPositiveMoneyField(
+                        field.jsonPointer()
+                )
+        ) {
+            return isPositiveNumber(node);
+        }
+
+        /*
+         * Boolean false остава валидна стойност.
+         *
+         * Например:
+         * withinBudget = false
+         * visaRequired = false
+         * breakfastIncluded = false
+         *
+         * Това са реални отговори, а не липсващи данни.
+         */
+        if (node.isBoolean()) {
+            return true;
+        }
+
+        /*
+         * При останалите числови полета нулата засега
+         * се приема за валидна, защото може да е логична.
+         *
+         * Например:
+         * numberOfLayovers = 0
+         */
+        if (node.isNumber()) {
+            return true;
+        }
+
         return true;
     }
 
-    private String formatValue(JsonNode node) {
-        if (node == null || node.isMissingNode() || node.isNull()) {
+    private boolean isRequiredPositiveMoneyField(
+            String jsonPointer
+    ) {
+        return jsonPointer != null
+                && REQUIRED_POSITIVE_MONEY_FIELDS.contains(
+                jsonPointer
+        );
+    }
+
+    private boolean isPositiveNumber(
+            JsonNode node
+    ) {
+        return node != null
+                && node.isNumber()
+                && Double.isFinite(
+                node.asDouble()
+        )
+                && node.asDouble() > 0;
+    }
+
+    private String formatValue(
+            JsonNode node
+    ) {
+        if (
+                node == null
+                        || node.isMissingNode()
+                        || node.isNull()
+        ) {
             return "Not provided";
         }
 
         if (node.isTextual()) {
-            return node.asText().isBlank()
+            return node
+                    .asText()
+                    .isBlank()
                     ? "Not provided"
                     : node.asText();
         }
@@ -124,35 +295,56 @@ public class ComparisonService {
                 return "Not provided";
             }
 
-            List<String> values = new ArrayList<>();
+            List<String> values =
+                    new ArrayList<>();
+
             node.forEach(item -> {
                 if (item.isValueNode()) {
-                    values.add(item.asText());
+                    values.add(
+                            item.asText()
+                    );
                 } else {
-                    values.add(item.toString());
+                    values.add(
+                            item.toString()
+                    );
                 }
             });
 
-            return String.join(", ", values);
+            return String.join(
+                    ", ",
+                    values
+            );
         }
 
         return node.toString();
     }
 
-    private String findWinner(Map<String, Double> scores) {
-        double maximum = scores.values()
-                .stream()
-                .mapToDouble(Double::doubleValue)
-                .max()
-                .orElse(0);
+    private String findWinner(
+            Map<String, Double> scores
+    ) {
+        double maximum =
+                scores.values()
+                        .stream()
+                        .mapToDouble(
+                                Double::doubleValue
+                        )
+                        .max()
+                        .orElse(0);
 
         return scores.entrySet()
                 .stream()
                 .filter(entry ->
-                        Double.compare(entry.getValue(), maximum) == 0
+                        Double.compare(
+                                entry.getValue(),
+                                maximum
+                        ) == 0
                 )
-                .map(Map.Entry::getKey)
-                .collect(Collectors.joining(", "));
+                .map(
+                        Map.Entry::getKey
+                )
+                .collect(
+                        Collectors.joining(", ")
+                );
     }
 
     private List<RankingEntry> createRanking(
@@ -162,27 +354,38 @@ public class ComparisonService {
                 totalScores.entrySet()
                         .stream()
                         .sorted(
-                                Map.Entry.<String, Double>comparingByValue()
+                                Map.Entry
+                                        .<String, Double>
+                                                comparingByValue()
                                         .reversed()
                         )
                         .toList();
 
-        List<RankingEntry> ranking = new ArrayList<>();
+        List<RankingEntry> ranking =
+                new ArrayList<>();
 
-        for (int index = 0; index < sorted.size(); index++) {
-            Map.Entry<String, Double> entry = sorted.get(index);
+        for (
+                int index = 0;
+                index < sorted.size();
+                index++
+        ) {
+            Map.Entry<String, Double> entry =
+                    sorted.get(index);
 
-            ranking.add(new RankingEntry(
-                    index + 1,
-                    entry.getKey(),
-                    entry.getValue()
-            ));
+            ranking.add(
+                    new RankingEntry(
+                            index + 1,
+                            entry.getKey(),
+                            entry.getValue()
+                    )
+            );
         }
 
         return ranking;
     }
 
-    private List<TableDefinition> createTableDefinitions() {
+    private List<TableDefinition>
+    createTableDefinitions() {
         return List.of(
                 new TableDefinition(
                         "Trip Summary",

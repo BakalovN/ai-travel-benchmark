@@ -13,7 +13,9 @@ public class OpenAiClient implements AiProviderClient {
 
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
+    @Value("${ai.openai.model}")
     private final String model;
+
 
     public OpenAiClient(
             RestClient.Builder builder,
@@ -87,5 +89,10 @@ public class OpenAiClient implements AiProviderClient {
         throw new IllegalStateException(
                 "No text was found in the OpenAI response."
         );
+    }
+
+    @Override
+    public String getModelName() {
+        return model;
     }
 }

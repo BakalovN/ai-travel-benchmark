@@ -12,6 +12,7 @@ import java.util.Map;
 public class MicrosoftFoundryClient implements AiProviderClient {
 
     private final RestClient restClient;
+    @Value("${ai.microsoft.model}")
     private final String model;
 
     public MicrosoftFoundryClient(
@@ -126,5 +127,10 @@ public class MicrosoftFoundryClient implements AiProviderClient {
         }
 
         return cleaned;
+    }
+
+    @Override
+    public String getModelName() {
+        return model;
     }
 }
