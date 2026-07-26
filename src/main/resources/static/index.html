@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Travel Benchmark Platform</title>
+    <style>
+        :root {
+            --bg: #f4f7fb;
+            --surface: #ffffff;
+            --surface-soft: #f8fafc;
+            --border: #dfe6ee;
+            --text: #243447;
+            --muted: #6b7785;
+            --primary: #3498db;
+            --primary-dark: #2980b9;
+            --success: #27ae60;
+            --danger: #c0392b;
+            --warning: #f1c40f;
+            --shadow: 0 4px 16px rgba(24, 39, 75, 0.08);
+        }
+
+        * { box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+
+        body {
+            min-height: 100vh;
+            margin: 0;
+            padding: 48px 20px;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        button, input { font: inherit; }
+        .container { width: 100%; max-width: 1500px; margin: 0 auto; }
+        h1 { margin: 0 0 34px; text-align: center; font-size: clamp(2rem, 4vw, 2.7rem); }
+
+        .input-container {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            max-width: 850px;
+            margin: 0 auto;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            min-width: 0;
+            padding: 14px 18px;
+            border: 2px solid var(--primary);
+            border-radius: 9px;
+            outline: none;
+            background: var(--surface);
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--primary-dark);
+            box-shadow: 0 0 0 4px rgba(52, 152, 219, 0.14);
+        }
+
+        button {
+            padding: 14px 28px;
+            border: 0;
+            border-radius: 9px;
+            background: var(--primary);
+            color: #fff;
+            cursor: pointer;
+        }
+
+        button:hover:not(:disabled) { background: var(--primary-dark); }
+        button:disabled { background: #95a5a6; cursor: not-allowed; }
+
+        .status-message {
+            min-height: 26px;
+            margin-top: 24px;
+            text-align: center;
+            font-size: 17px;
+            font-weight: 700;
+        }
+
+        .status-message.loading { color: var(--primary-dark); }
+        .status-message.error { color: var(--danger); }
+        .status-message.success { color: var(--success); }
+        .results-section { margin-top: 44px; }
+        .section-title { margin: 42px 0 22px; text-align: center; font-size: 1.9rem; }
+
+        .model-results {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 20px;
+        }
+
+        .model-card {
+            min-width: 0;
+            padding: 22px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+        }
+
+        .model-card h3 { margin: 0 0 16px; }
+        .model-meta { margin: 0 0 9px; line-height: 1.5; }
+        .success-value { color: var(--success); font-weight: 700; }
+        .error-value { color: var(--danger); font-weight: 700; }
+
+        .model-content {
+            max-height: 420px;
+            margin: 16px 0 0;
+            padding: 15px;
+            overflow: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--surface-soft);
+            white-space: pre-wrap;
+            overflow-wrap: break-word;
+            font-family: Consolas, Monaco, monospace;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .comparison-table-wrapper {
+            margin-bottom: 34px;
+            overflow: hidden;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+        }
+
+        .comparison-table-header { padding: 20px 22px; }
+        .comparison-table-header h3 { margin: 0 0 8px; }
+        .winner { margin: 0; color: var(--success); font-weight: 700; }
+        .table-scroll-container { width: 100%; overflow-x: auto; }
+
+        .comparison-table {
+            width: 100%;
+            min-width: 1450px;
+            border-collapse: collapse;
+            table-layout: auto;
+        }
+
+        .comparison-table th,
+        .comparison-table td {
+            padding: 13px;
+            border: 1px solid var(--border);
+            text-align: left;
+            vertical-align: top;
+            line-height: 1.5;
+        }
+
+        .comparison-table th { background: var(--primary); color: #fff; }
+
+        .comparison-table td:first-child {
+            width: 210px;
+            min-width: 210px;
+            background: var(--surface-soft);
+            font-weight: 700;
+        }
+
+        .comparison-value {
+            width: 400px;
+            min-width: 400px;
+            white-space: normal;
+            word-break: normal;
+            overflow-wrap: break-word;
+        }
+
+        .score-row td { background: #edf6fc; font-weight: 700; }
+
+        .structured-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .structured-item {
+            width: 100%;
+            min-width: 0;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--surface-soft);
+        }
+
+        .structured-item-title {
+            margin-bottom: 9px;
+            font-size: 15px;
+            font-weight: 700;
+            word-break: normal;
+            overflow-wrap: break-word;
+        }
+
+        .structured-field {
+            display: grid;
+            grid-template-columns: 165px minmax(0, 1fr);
+            gap: 12px;
+            padding: 7px 0;
+            border-bottom: 1px solid #e9eef3;
+        }
+
+        .structured-field-block {
+            display: block;
+            padding: 9px 0;
+            border-bottom: 1px solid #e9eef3;
+        }
+
+        .structured-field:last-child,
+        .structured-field-block:last-child { border-bottom: 0; }
+
+        .structured-label {
+            color: #566573;
+            font-weight: 700;
+            word-break: normal;
+            overflow-wrap: break-word;
+        }
+
+        .structured-value,
+        .structured-block-value {
+            min-width: 0;
+            white-space: normal;
+            word-break: normal;
+            overflow-wrap: break-word;
+        }
+
+        .structured-block-value { margin-top: 10px; }
+        .structured-empty { color: #95a5a6; font-style: italic; }
+
+        .nested-structure {
+            width: 100%;
+            padding-left: 10px;
+            border-left: 3px solid #d6eaf8;
+        }
+
+        .ranking-container { max-width: 760px; margin: 0 auto; }
+
+        .ranking-entry {
+            display: grid;
+            grid-template-columns: 70px minmax(0, 1fr) 150px;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 12px;
+            padding: 18px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            box-shadow: var(--shadow);
+        }
+
+        .ranking-entry:first-child { border: 2px solid var(--warning); }
+        .ranking-position { text-align: center; font-size: 22px; font-weight: 700; }
+        .ranking-model { font-size: 18px; font-weight: 700; }
+        .ranking-score { text-align: right; color: var(--primary-dark); font-weight: 700; }
+
+        .empty-message {
+            margin: 0;
+            padding: 20px;
+            background: var(--surface);
+            border-radius: 8px;
+            color: var(--muted);
+            text-align: center;
+        }
+
+        @media (max-width: 900px) {
+            body { padding: 30px 15px; }
+            .model-results { grid-template-columns: 1fr; }
+            .input-container { flex-direction: column; }
+            button { width: 100%; }
+            .ranking-entry { grid-template-columns: 55px minmax(0, 1fr); }
+            .ranking-score { grid-column: 2; text-align: left; }
+        }
+
+        @media (max-width: 700px) {
+            .structured-field { grid-template-columns: 1fr; gap: 3px; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>AI Travel Benchmark Platform</h1>
+
+    <div class="input-container">
+        <input type="text" id="prompt" placeholder="Enter your prompt...">
+        <button id="sendButton" type="button">Send</button>
+    </div>
+
+    <div id="statusMessage" class="status-message" aria-live="polite"></div>
+
+    <div id="resultsSection" class="results-section" hidden>
+        <h2 class="section-title">AI Model Responses</h2>
+        <div id="modelResults" class="model-results"></div>
+
+        <h2 class="section-title">Comparison Tables</h2>
+        <div id="comparisonResults"></div>
+
+        <h2 class="section-title">Final Ranking</h2>
+        <div id="finalRanking" class="ranking-container"></div>
+    </div>
+</div>
+
+<script>
+    const outputSchema = {
+            tripSummary: {
+                origin: "",
+                destination: "",
+                startDate: "",
+                endDate: "",
+                numberOfDays: 0,
+                numberOfNights: 0,
+                numberOfTravelers: 1,
+                currency: "EUR"
+            },
+
+            budget: {
+                maximumBudgetPerPerson: 0,
+                flightCost: 0,
+                accommodationCost: 0,
+                foodCost: 0,
+                localTransportationCost: 0,
+                activitiesCost: 0,
+                insuranceCost: 0,
+                visaCost: 0,
+                otherCosts: 0,
+                totalEstimatedCost: 0,
+                withinBudget: false
+            },
+
+            flight: {
+                airlineCompany: "",
+                flightNumber: "",
+                flightClass: "",
+                departureAirport: "",
+                arrivalAirport: "",
+                departureDate: "",
+                departureTime: "",
+                arrivalDate: "",
+                arrivalTime: "",
+                flightDurationMinutes: 0,
+                numberOfLayovers: 0,
+                layoverAirports: [],
+                baggageIncluded: false,
+                baggageDetails: "",
+                roundTripIncluded: false,
+                estimatedTicketPrice: 0
+            },
+
+            accommodation: {
+                hotelName: "",
+                hotelCategoryStars: 0,
+                address: "",
+                district: "",
+                distanceFromCityCenterKm: 0,
+                guestRating: 0,
+                numberOfNights: 0,
+                roomType: "",
+                breakfastIncluded: false,
+                pricePerNight: 0,
+                totalAccommodationPrice: 0,
+                checkInTime: "",
+                checkOutTime: "",
+                cancellationConditions: ""
+            },
+
+            airportTransfer: {
+                included: false,
+                transportType: "",
+                estimatedDurationMinutes: 0,
+                estimatedCost: 0,
+                instructions: ""
+            },
+
+            localTransportation: {
+                recommendedTransportTypes: [],
+                publicTransportCard: "",
+                publicTransportCardPrice: 0,
+                estimatedTotalCost: 0,
+                taxiInformation: "",
+                accessibilityInformation: ""
+            },
+
+            dailyTourProgram: [
+                {
+                    day: 1,
+                    date: "",
+                    theme: "",
+
+                    activities: [
+                        {
+                            startTime: "",
+                            endTime: "",
+                            activityName: "",
+                            location: "",
+                            description: "",
+                            category: "",
+                            estimatedDurationMinutes: 0,
+                            estimatedCost: 0,
+                            ticketRequired: false,
+                            ticketIncluded: false,
+                            openingHours: "",
+                            transportToNextLocation: "",
+                            travelTimeToNextLocationMinutes: 0,
+                            sourceUrl: ""
+                        }
+                    ],
+
+                    freeTimeMinutes: 0,
+                    dailyEstimatedCost: 0
+                }
+            ],
+
+            touristAttractions: [
+                {
+                    name: "",
+                    category: "",
+                    address: "",
+                    openingHours: "",
+                    ticketPrice: 0,
+                    estimatedVisitDurationMinutes: 0,
+                    reservationRequired: false,
+                    sourceUrl: ""
+                }
+            ],
+
+            foodAndRestaurants: {
+                dailyFoodBudget: 0,
+                recommendedLocalFoods: [],
+
+                restaurants: [
+                    {
+                        name: "",
+                        cuisine: "",
+                        address: "",
+                        priceLevel: "",
+                        estimatedMealPrice: 0,
+                        dietaryOptions: [],
+                        reservationRecommended: false,
+                        sourceUrl: ""
+                    }
+                ]
+            },
+
+            includedServices: [],
+
+            excludedServices: [],
+
+            optionalTours: [
+                {
+                    name: "",
+                    description: "",
+                    price: 0,
+                    durationMinutes: 0,
+                    includedInTotalBudget: false
+                }
+            ],
+
+            legalOperationalInformation: {
+                visaRequired: false,
+                visaType: "",
+                visaFee: 0,
+                passportValidityRequirements: "",
+                travelInsuranceRequired: false,
+                travelInsuranceIncluded: false,
+                touristTaxes: "",
+                internationalDepartureFee: "",
+                entryRequirements: "",
+                healthRequirements: "",
+                vaccinationRequirements: "",
+                customsInformation: "",
+                cancellationConditions: "",
+                consumerProtectionInformation: "",
+                emergencyNumber: "",
+                embassyInformation: ""
+            },
+
+            safety: {
+                generalSafetyLevel: "",
+                touristWarnings: [],
+                commonScams: [],
+                medicalInformation: "",
+                emergencyInstructions: ""
+            },
+
+            weather: {
+                season: "",
+                expectedMinimumTemperatureCelsius: 0,
+                expectedMaximumTemperatureCelsius: 0,
+                expectedConditions: "",
+                clothingRecommendations: []
+            },
+
+            sustainability: {
+                publicTransportRecommended: false,
+                walkableItinerary: false,
+                ecoFriendlyAccommodation: false,
+                sustainableActivities: [],
+                estimatedCarbonEmissionsKg: 0
+            },
+
+            personalization: {
+                travelerType: "",
+                interests: [],
+                dietaryRequirements: [],
+                mobilityRestrictions: [],
+                preferredTravelPace: "",
+                specialRequirements: []
+            },
+
+            sources: [
+                {
+                    title: "",
+                    url: "",
+                    sourceType: "",
+                    accessDate: ""
+                }
+            ],
+
+            selfAssessment: {
+                confidenceScore: 0,
+                uncertainFields: [],
+                assumptions: [],
+                missingInformation: []
+            }
+        };
+
+        function escapeHtml(value) {
+            return String(value ?? "")
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
+
+        function humanizeFieldName(fieldName) {
+            return String(fieldName || "")
+                .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+                .replaceAll("_", " ")
+                .replace(/^./, character => character.toUpperCase());
+        }
+
+        function tryParseStructuredString(value) {
+            if (typeof value !== "string") {
+                return value;
+            }
+
+            const trimmed = value.trim();
+            if (!trimmed) {
+                return value;
+            }
+
+            try {
+                return JSON.parse(trimmed);
+            } catch (_) {
+                // Try a comma-separated sequence of JSON objects.
+            }
+
+            if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+                try {
+                    return JSON.parse(`[${trimmed}]`);
+                } catch (_) {
+                    return value;
+                }
+            }
+
+            return value;
+        }
+
+        function isObjectValue(value) {
+            return value !== null && typeof value === "object";
+        }
+
+        function isObjectList(value) {
+            const parsed = tryParseStructuredString(value);
+            return Array.isArray(parsed) && parsed.some(item => isObjectValue(tryParseStructuredString(item)));
+        }
+
+        function formatPrimitiveValue(value, fieldName = "") {
+            if (value === null || value === undefined || value === "") {
+                return '<span class="structured-empty">Not provided</span>';
+            }
+
+            if (typeof value === "boolean") {
+                return value ? "Yes" : "No";
+            }
+
+            if (Array.isArray(value)) {
+                if (value.length === 0) {
+                    return '<span class="structured-empty">None</span>';
+                }
+                return value.map(item => escapeHtml(item)).join(", ");
+            }
+
+            const normalized = fieldName.toLowerCase();
+
+            if (
+                typeof value === "number" &&
+                (normalized.includes("price") || normalized.includes("cost") || normalized.includes("budget") || normalized.includes("fee"))
+            ) {
+                return `${escapeHtml(value)} EUR`;
+            }
+
+            if (typeof value === "number" && normalized.includes("minutes")) {
+                return `${escapeHtml(value)} min`;
+            }
+
+            if (typeof value === "number" && normalized.includes("km")) {
+                return `${escapeHtml(value)} km`;
+            }
+
+            return escapeHtml(value);
+        }
+
+        function renderObjectFields(object, titleToSkip = "") {
+            const titleFields = ["name", "activityName", "hotelName", "title", "theme"];
+
+            return Object.entries(object)
+                .filter(([key, value]) => !(titleFields.includes(key) && String(value) === String(titleToSkip)))
+                .map(([key, rawValue]) => {
+                    const value = tryParseStructuredString(rawValue);
+                    const label = escapeHtml(humanizeFieldName(key));
+                    const rendered = renderStructuredValue(value, key);
+
+                    if (isObjectList(value) || (isObjectValue(value) && !Array.isArray(value))) {
+                        return `<div class="structured-field-block"><div class="structured-label">${label}:</div><div class="structured-block-value">${rendered}</div></div>`;
+                    }
+
+                    return `<div class="structured-field"><div class="structured-label">${label}:</div><div class="structured-value">${rendered}</div></div>`;
+                })
+                .join("");
+        }
+
+        function renderStructuredValue(rawValue, fieldName = "") {
+            const value = tryParseStructuredString(rawValue);
+
+            if (!isObjectValue(value)) {
+                return formatPrimitiveValue(value, fieldName);
+            }
+
+            if (Array.isArray(value)) {
+                if (value.length === 0) {
+                    return '<span class="structured-empty">None</span>';
+                }
+
+                const parsedItems = value.map(item => tryParseStructuredString(item));
+                const containsObjects = parsedItems.some(isObjectValue);
+
+                if (!containsObjects) {
+                    return formatPrimitiveValue(parsedItems, fieldName);
+                }
+
+                const cards = parsedItems.map((item, index) => {
+                    if (!isObjectValue(item)) {
+                        return `<div class="structured-item">${formatPrimitiveValue(item, fieldName)}</div>`;
+                    }
+
+                    const title =
+                        item.name ||
+                        item.activityName ||
+                        item.hotelName ||
+                        item.title ||
+                        item.theme ||
+                        (item.day ? `Day ${item.day}` : `Item ${index + 1}`);
+
+                    return `<div class="structured-item"><div class="structured-item-title">${escapeHtml(title)}</div>${renderObjectFields(item, title)}</div>`;
+                }).join("");
+
+                return `<div class="structured-list">${cards}</div>`;
+            }
+
+            return `<div class="nested-structure">${renderObjectFields(value)}</div>`;
+        }
+
+        function formatJson(value) {
+            if (value === null || value === undefined) {
+                return "No content";
+            }
+            return typeof value === "string" ? value : JSON.stringify(value, null, 2);
+        }
+
+        function setStatus(message, type = "") {
+            const element = document.getElementById("statusMessage");
+            element.textContent = message;
+            element.className = `status-message${type ? ` ${type}` : ""}`;
+        }
+
+        function clearResults() {
+            document.getElementById("modelResults").replaceChildren();
+            document.getElementById("comparisonResults").replaceChildren();
+            document.getElementById("finalRanking").replaceChildren();
+        }
+
+        function renderModelResults(results) {
+            const container = document.getElementById("modelResults");
+            container.replaceChildren();
+
+            if (!Array.isArray(results) || results.length === 0) {
+                container.innerHTML = '<p class="empty-message">No model results were returned.</p>';
+                return;
+            }
+
+            for (const result of results) {
+                const card = document.createElement("article");
+                card.className = "model-card";
+
+                const provider = result.provider || "Unknown provider";
+                const model = result.model || "Unknown model";
+                const successful = Boolean(result.successful);
+                const responseTime = result.responseTimeMilliseconds ?? 0;
+                const content = successful ? formatJson(result.content) : (result.errorMessage || "Unknown error");
+
+                card.innerHTML =
+                    `<h3>${escapeHtml(provider)}</h3>` +
+                    `<p class="model-meta"><strong>Model:</strong> ${escapeHtml(model)}</p>` +
+                    `<p class="model-meta"><strong>Status:</strong> <span class="${successful ? "success-value" : "error-value"}">${successful ? "Successful" : "Failed"}</span></p>` +
+                    `<p class="model-meta"><strong>Response time:</strong> ${escapeHtml(responseTime)} ms</p>` +
+                    `<pre class="model-content">${escapeHtml(content)}</pre>`;
+
+                container.appendChild(card);
+            }
+        }
+
+        function renderComparison(comparison) {
+            const container = document.getElementById("comparisonResults");
+            container.replaceChildren();
+
+            if (!comparison || !Array.isArray(comparison.tables) || comparison.tables.length === 0) {
+                container.innerHTML = '<p class="empty-message">No comparison data was returned.</p>';
+                return;
+            }
+
+            for (const table of comparison.tables) {
+                const wrapper = document.createElement("section");
+                wrapper.className = "comparison-table-wrapper";
+
+                let modelNames = Object.keys(table.scores || {});
+                if (modelNames.length === 0 && Array.isArray(table.rows)) {
+                    const firstRow = table.rows.find(row => row?.values && typeof row.values === "object");
+                    modelNames = firstRow ? Object.keys(firstRow.values) : [];
+                }
+
+                const headers = modelNames.map(model => `<th>${escapeHtml(model)}</th>`).join("");
+                const rows = (table.rows || []).map(row => {
+                    const label = row.label ?? row.field ?? "Unknown criterion";
+                    const cells = modelNames.map(model => {
+                        const value = row.values?.[model] ?? "Not provided";
+                        return `<td class="comparison-value">${renderStructuredValue(value, label)}</td>`;
+                    }).join("");
+                    return `<tr><td>${escapeHtml(label)}</td>${cells}</tr>`;
+                }).join("");
+
+                const scores = modelNames
+                    .map(model => `<td>${escapeHtml(table.scores?.[model] ?? 0)}</td>`)
+                    .join("");
+
+                wrapper.innerHTML =
+                    `<div class="comparison-table-header"><h3>${escapeHtml(table.title || "Comparison")}</h3><p class="winner">Winner: ${escapeHtml(table.winner || "No winner")}</p></div>` +
+                    `<div class="table-scroll-container"><table class="comparison-table"><thead><tr><th>Criterion</th>${headers}</tr></thead><tbody>${rows}<tr class="score-row"><td>Category score</td>${scores}</tr></tbody></table></div>`;
+
+                container.appendChild(wrapper);
+            }
+        }
+
+        function renderRanking(comparison) {
+            const container = document.getElementById("finalRanking");
+            container.replaceChildren();
+
+            if (!comparison || !Array.isArray(comparison.ranking) || comparison.ranking.length === 0) {
+                container.innerHTML = '<p class="empty-message">No ranking data was returned.</p>';
+                return;
+            }
+
+            for (const entry of comparison.ranking) {
+                const element = document.createElement("div");
+                element.className = "ranking-entry";
+                element.innerHTML =
+                    `<div class="ranking-position">#${escapeHtml(entry.position ?? "-")}</div>` +
+                    `<div class="ranking-model">${escapeHtml(entry.model ?? "Unknown model")}</div>` +
+                    `<div class="ranking-score">${escapeHtml(entry.score ?? 0)} points</div>`;
+                container.appendChild(element);
+            }
+        }
+
+        async function executeBenchmark() {
+            const promptInput = document.getElementById("prompt");
+            const sendButton = document.getElementById("sendButton");
+            const resultsSection = document.getElementById("resultsSection");
+            const prompt = promptInput.value.trim();
+
+            if (!prompt) {
+                setStatus("Please enter a prompt.", "error");
+                promptInput.focus();
+                return;
+            }
+
+            sendButton.disabled = true;
+            sendButton.textContent = "Processing...";
+            resultsSection.hidden = true;
+            clearResults();
+            setStatus("The AI models are generating their responses. This may take some time...", "loading");
+
+            try {
+                const response = await fetch("/api/prompt", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ prompt, outputSchema })
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Server returned status ${response.status}: ${errorText}`);
+                }
+
+                const data = await response.json();
+                console.log("Complete server response:", data);
+
+                renderModelResults(data.results);
+                renderComparison(data.comparison);
+                renderRanking(data.comparison);
+
+                resultsSection.hidden = false;
+                setStatus("Benchmark completed successfully.", "success");
+                resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+            } catch (error) {
+                console.error("Request error:", error);
+                setStatus(`Request failed: ${error.message}`, "error");
+            } finally {
+                sendButton.disabled = false;
+                sendButton.textContent = "Send";
+            }
+        }
+
+        document.getElementById("sendButton").addEventListener("click", executeBenchmark);
+        document.getElementById("prompt").addEventListener("keydown", event => {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                executeBenchmark();
+            }
+        });
+</script>
+</body>
+</html>
