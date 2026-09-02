@@ -17,13 +17,6 @@ public class ComparisonService {
     private static final String GEMINI = "Gemini";
     private static final String MICROSOFT = "Microsoft Phi";
 
-    /*
-     * При тези полета стойност 0 не представлява
-     * реална финансова оценка и не носи точки.
-     *
-     * Не включваме полета като visaCost или otherCosts,
-     * защото при тях нулата може да бъде напълно коректна.
-     */
     private static final Set<String>
             REQUIRED_POSITIVE_MONEY_FIELDS = Set.of(
             "/budget/maximumBudgetPerPerson",
@@ -186,9 +179,6 @@ public class ComparisonService {
         );
     }
 
-    /**
-     * Проверява дали дадена стойност трябва да получи точки.
-     */
     private boolean hasMeaningfulValue(
             FieldDefinition field,
             JsonNode node
@@ -211,10 +201,6 @@ public class ComparisonService {
             return !node.isEmpty();
         }
 
-        /*
-         * При задължителните парични полета стойността
-         * трябва да бъде реално число, по-голямо от нула.
-         */
         if (
                 isRequiredPositiveMoneyField(
                         field.jsonPointer()
@@ -223,27 +209,10 @@ public class ComparisonService {
             return isPositiveNumber(node);
         }
 
-        /*
-         * Boolean false остава валидна стойност.
-         *
-         * Например:
-         * withinBudget = false
-         * visaRequired = false
-         * breakfastIncluded = false
-         *
-         * Това са реални отговори, а не липсващи данни.
-         */
         if (node.isBoolean()) {
             return true;
         }
 
-        /*
-         * При останалите числови полета нулата засега
-         * се приема за валидна, защото може да е логична.
-         *
-         * Например:
-         * numberOfLayovers = 0
-         */
         if (node.isNumber()) {
             return true;
         }
