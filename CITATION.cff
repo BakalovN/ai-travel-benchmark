@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: "If you use this software or its benchmarking methodology in academic research, please cite the associated research article."
+title: "AI Travel Benchmark"
+type: software
+version: 1.0.0
+
+authors:
+  - family-names: "Bakalov"
+    given-names: "REPLACE_WITH_FULL_GIVEN_NAME"
+
+repository-code: "https://github.com/BakalovN/ai-travel-benchmark"
+url: "https://github.com/BakalovN/ai-travel-benchmark"
+
+license: Apache-2.0
+
+keywords:
+  - artificial intelligence
+  - large language models
+  - LLM
+  - benchmarking
+  - travel planning
+  - generative AI
+  - tourism
+  - structured evaluation
+  - reproducible research
+
+abstract: >
+  AI Travel Benchmark is an open-source, provider-independent framework
+  for the automated comparative evaluation of AI-generated travel plans.
+  The framework applies standardized input conditions, structured JSON
+  response processing, field-level comparison, deterministic scoring,
+  and automatic ranking across heterogeneous large language models.
